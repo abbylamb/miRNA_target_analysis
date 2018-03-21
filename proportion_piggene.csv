@@ -1,0 +1,5 @@
+"","dataset","target_predictions","pigment_gene_targets","proportion"
+"1","full",189167,3044,0.016091601600702
+"2","lighten_or_darken",39543,565,0.0142882431783122
+"3","lighten",21186,261,0.0123194562446899
+"4","darken",23743,383,0.0161310702101672
