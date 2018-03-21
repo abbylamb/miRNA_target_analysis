@@ -277,3 +277,24 @@ dark_expected[4,] <- c('darken', nrow(darkmirdb), length(which(darkmirdb$gene_fx
                        length(which(darkmirdb$gene_fxn_pigm == 'D' | darkmirdb$gene_fxn_pigm == "B"))/(nrow(darkmirdb)))
 dark_expected
 write.csv(dark_expected, "dark_expected.csv")
+
+## for each data subset (sufficientmirs, lightmirdb, darkmirdb, full), what proportion of 
+## targeted genes are "lightening genes". Are there more lightening genes targeted by those 
+## sufficient to effect pigmentation (in either direction)?
+## darkening mirs (darkmirdb) would logically be expected to target "lightening genes"
+
+light_expected <- data.frame(matrix(ncol=4, nrow=0), stringsAsFactors = FALSE)
+light_expected
+h <- c('dataset','target_predictions','lightgenes_targeted','proportion')
+colnames(light_expected) <- h
+light_expected[1,] <- c('full', nrow(trimfullset), length(which(trimfullset$gene_fxn_pigm == 'L' | trimfullset$gene_fxn_pigm == "B")), 
+                        length(which(trimfullset$gene_fxn_pigm == 'L' | trimfullset$gene_fxn_pigm == "B"))/(nrow(trimfullset)))
+
+light_expected[2,] <- c('lighten_or_darken', nrow(sufficientmirs), length(which(sufficientmirs$gene_fxn_pigm == 'L' | sufficientmirs$gene_fxn_pigm == "B")), 
+                        length(which(sufficientmirs$gene_fxn_pigm == 'L' | sufficientmirs$gene_fxn_pigm == "B"))/(nrow(sufficientmirs)))
+light_expected[3,] <- c('lighten', nrow(lightmirdb), length(which(lightmirdb$gene_fxn_pigm == 'L' | lightmirdb$gene_fxn_pigm == "B")), 
+                        length(which(lightmirdb$gene_fxn_pigm == 'L' | lightmirdb$gene_fxn_pigm == "B"))/(nrow(lightmirdb)))
+light_expected[4,] <- c('darken', nrow(darkmirdb), length(which(darkmirdb$gene_fxn_pigm == 'L' | darkmirdb$gene_fxn_pigm == "B")), 
+                        length(which(darkmirdb$gene_fxn_pigm == 'L' | darkmirdb$gene_fxn_pigm == "B"))/(nrow(darkmirdb)))
+light_expected
+write.csv(light_expected, "light_expected.csv")
