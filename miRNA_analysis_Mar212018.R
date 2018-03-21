@@ -254,5 +254,26 @@ propstat_greater(sufficientmirs)
 propstat_less(sufficientmirs)
 ## the proportion of pigment genes targeted by miRs sufficient to change pigmentation is  significantly
 ## less than the proportion of pigment genes targeted by all miRs
+proptesting <- function(x)
+  data.frame(matrix(ncol=4, nrow=0), stringsAsFactors = FALSE)
+  c(deparse(substitute(x)), propstat_2side(x)$p.value, propstat_greater(x)$p.value, propstat_less(x)$p.value)
 
+## for each data subset (sufficientmirs, lightmirdb, darkmirdb, full), what proportion of 
+## targeted genes are "darkening genes". Are there more darkening genes targeted by those 
+## sufficient to effect pigmentation (in either direction)?
+## lightening mirs (lightmirdb) would logically be expected to target "darkening genes"
+dark_expected <- data.frame(matrix(ncol=4, nrow=0), stringsAsFactors = FALSE)
+dark_expected
+m <- c('dataset','target_predictions','darkgenes_targeted','proportion')
+colnames(dark_expected) <- m
+dark_expected[1,] <- c('full', nrow(trimfullset), length(which(trimfullset$gene_fxn_pigm == 'D' | trimfullset$gene_fxn_pigm == "B")), 
+                       length(which(trimfullset$gene_fxn_pigm == 'D' | trimfullset$gene_fxn_pigm == "B"))/(nrow(trimfullset)))
 
+dark_expected[2,] <- c('lighten_or_darken', nrow(sufficientmirs), length(which(sufficientmirs$gene_fxn_pigm == 'D' | sufficientmirs$gene_fxn_pigm == "B")), 
+                       length(which(sufficientmirs$gene_fxn_pigm == 'D' | sufficientmirs$gene_fxn_pigm == "B"))/(nrow(sufficientmirs)))
+dark_expected[3,] <- c('lighten', nrow(lightmirdb), length(which(lightmirdb$gene_fxn_pigm == 'D' | lightmirdb$gene_fxn_pigm == "B")), 
+                       length(which(lightmirdb$gene_fxn_pigm == 'D' | lightmirdb$gene_fxn_pigm == "B"))/(nrow(lightmirdb)))
+dark_expected[4,] <- c('darken', nrow(darkmirdb), length(which(darkmirdb$gene_fxn_pigm == 'D' | darkmirdb$gene_fxn_pigm == "B")), 
+                       length(which(darkmirdb$gene_fxn_pigm == 'D' | darkmirdb$gene_fxn_pigm == "B"))/(nrow(darkmirdb)))
+dark_expected
+write.csv(dark_expected, "dark_expected.csv")
