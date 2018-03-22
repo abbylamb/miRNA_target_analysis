@@ -307,4 +307,380 @@ light_expected[4,] <- c('darken', nrow(darkmirdb), length(which(darkmirdb$gene_f
 light_expected
 write.csv(light_expected, "light_expected.csv")
 
+###################################################################################
+
+
+##Playing around with adding new info from flybase (expression,etc) but will need to add FBids
+
+ids_miranda<-subset(all, select = c(gene_id, gene_symbol, transcript_id))
+annotations <- read.delim(file = "flybase_annotation_table.txt", sep = "\t")
+annotations <- data.frame(lapply(annotations, as.character), stringsAsFactors = FALSE)
+
+##need annotation ID to match flybase annotation table, so I'm taking the "-R_" off each transcript_id
+ids_miranda <- mutate(ids_miranda, annotation_id = substr(transcript_id,1,nchar(transcript_id)-3))
+head(ids_miranda)
+dim(ids_miranda)
+class(ids_miranda$transcript_id)
+head(annotations)
+colnames(annotations) <- c("gene_symbol", "primary_FBgn", "secondary_FBgns", "annotation_ID", "secondary_annotation_IDs") 
+annotations_reduced <- subset(annotations, select = c(primary_FBgn, annotation_ID))
+head(annotations_reduced)
+##want to add FBgn numbers to each id in my database
+testing_ljoin <- left_join(ids_miranda, annotations_reduced, by = "annotation_ID")
+annotations_reduced <- data.frame(lapply(annotations_reduced, as.character), stringsAsFactors=FALSE)
+ids_miranda <- data.frame(lapply(ids_miranda, as.character), stringsAsFactors=FALSE)
+class(ids_miranda$annotation_ID)
+colnames(ids_miranda) <- c("gene_ID", "gene_symbol", "transcript_ID", "annotation_ID")
+write.csv(testing_ljoin, "added_FBgn.csv")
+##quite a few lines didn't have matches in annotation ID. 
+## need to figure out how to use secondary annotation IDs
+
+###the next 5 lines are garbage
+#ljoin2 <- data.frame(testing_ljoin) 
+#names(ljoin2) <- c("gene_ID", "gene_symbol", "transcript_ID", "secondary_annotation_IDs", "primary_FBgn")
+#ljoin2 <- left_join(ljoin2, annotations, by = "secondary_annotation_IDs")
+#head(ljoin2)
+#write.csv(ljoin2, "maybe_better_added_FBgn.csv")
+
+install.packages("tidyr")
+library("tidyr")
+
+##need to split secondary annotation IDs into individual columns
+septest <- data.frame(annotations, stringsAsFactors = FALSE)
+split_IDs <- septest %>% separate(secondary_annotation_IDs, c("secondary_ID", "tertiary_ID", "quaternary_ID", "5th_ID", "6th_ID", "7th_ID", "8th_ID", "9th_ID", "10th_ID", "11th_ID", "12th_ID", "13th_ID"), ",")
+## Kept adding columns until I stopped getting warnings about additional pieces being discarded.
+head(split_IDs)
+colnames(split_IDs)
+write.csv(split_IDs, "split_IDs_flybase_Feb14.csv")
+
+## So far, "testingljoin" is the best I have as far as a combination of Flybase and miRanda names
+## need to find a way to get flybase secondary annotation ids matched up to miRanda list
+## in order to match a FBgn number to every gene.
+counter <- 1
+looptest <- data.frame(testing_ljoin, stringsAsFactors = FALSE)
+for (i in looptest$primary_FBgn){
+  
+  if (is.na(looptest$primary_FBgn[counter]) == TRUE & 
+      looptest$annotation_ID[counter]  %in% split_IDs$secondary_ID == TRUE
+  )
+  {
+    
+    looptest$primary_FBgn[counter] <- split_IDs$primary_FBgn[split_IDs$secondary_ID == looptest$annotation_ID[counter]]
+  }
+  
+  
+  counter <- counter + 1
+}
+with_secondary <- data.frame(looptest, stringsAsFactors = FALSE)
+write.csv(with_secondary, "with_secondary.csv")
+
+### Now that I've added secondary annotation IDs, need to add tertiary annotation IDs
+with_tertiary <- data.frame(with_secondary, stringsAsFactors = FALSE)
+counter <- 1
+for (i in with_tertiary$primary_FBgn){
+  
+  if (is.na(with_tertiary$primary_FBgn[counter]) == TRUE & with_tertiary$annotation_ID[counter]  %in% split_IDs$tertiary_ID == TRUE)
+  {
+    with_tertiary$primary_FBgn[counter] <- split_IDs$primary_FBgn[split_IDs$tertiary_ID == with_tertiary$annotation_ID[counter] & is.na(split_IDs$tertiary_ID) == FALSE]
+  }
+  counter <- counter + 1
+}
+head(with_tertiary)
+write.csv(with_tertiary, "with_tertiary.csv")
+
+## adding quaternary annotation ids. down to only 50 unmatched annotation IDs so far!
+with_quaternary <- data.frame(with_tertiary, stringsAsFactors = FALSE)
+counter <- 1
+for (i in with_quaternary$primary_FBgn){
+  
+  if (is.na(with_quaternary$primary_FBgn[counter]) == TRUE & with_quaternary$annotation_ID[counter]  %in% split_IDs$quaternary_ID == TRUE)
+  {
+    with_quaternary$primary_FBgn[counter] <- split_IDs$primary_FBgn[split_IDs$quaternary_ID == with_quaternary$annotation_ID[counter] & is.na(split_IDs$quaternary_ID) == FALSE]
+  }
+  counter <- counter + 1
+}
+head(with_quaternary)
+write.csv(with_quaternary, "with_quaternary.csv")
+
+## adding 5th annotation ids. down to only 33 unmatched annotation IDs so far!
+with_5th <- data.frame(with_quaternary, stringsAsFactors = FALSE)
+counter <- 1
+for (i in with_5th$primary_FBgn){
+  
+  if (is.na(with_5th$primary_FBgn[counter]) == TRUE & with_5th$annotation_ID[counter]  %in% split_IDs$`5th_ID` == TRUE)
+  {
+    with_5th$primary_FBgn[counter] <- split_IDs$primary_FBgn[split_IDs$`5th_ID` == with_5th$annotation_ID[counter] & is.na(split_IDs$`5th_ID`) == FALSE]
+  }
+  counter <- counter + 1
+}
+head(with_5th)
+write.csv(with_5th, "with_5th.csv")
+
+### 21 unpaired annotation IDs remain. May just fix them manually.
+### it turns out most of these 21 aren't even genes anymore. they've been removed, but still have ids
+
+dim(with_5th)
+no_repeat_with_5th <- unique(with_5th)
+dim(no_repeat_with_5th)
+write.csv(no_repeat_with_5th, "FBgns_miranda_no_repeats.csv")
+###opened up the csv file above and manually annotated the remaining few fbgns.
+###there are still repeats of genes because of different transcript ids, so I'll get rid of those too.
+
+miranda_fbgn <- read.csv("miranda_genes_w_FBgn.csv")
+head(miranda_fbgn)
+miranda_fbgn <- subset(miranda_fbgn, select = c(gene_ID, primary_FBgn))
+head(miranda_fbgn)
+dim(miranda_fbgn)
+miranda_fbgn <- unique(miranda_fbgn)
+dim(miranda_fbgn)
+write.csv(miranda_fbgn, "unique_miranda_w_fbgn.csv")
+colnames(miranda_fbgn) <- c("gene_id", "fbgn")
+### should now only have unique miranda gene IDs and their corresponding FBgn numbers
+
+## add FBgn data to main dataset
+all_with_fbgn <- full_join(all, miranda_fbgn, by="gene_id")
+fullset_with_fbgn <- full_join(fullset, miranda_fbgn, by="gene_id")
+write.csv(fullset_with_fbgn, "fullset_screen_piggenes_fbgn.csv")
+
+
+## select a set of 80 random genes (because there's 80 pigment genes in my list)
+## count how many times these genes are regulated by miRNAs that are
+## 1) sufficient to darken pigmentation 2) sufficient to lighten pigmentation 3) not sufficient to affect pigmentation
+initiate_df <- data.frame(rep=integer(),darkmirs=integer(),lightmirs=integer(),noeffect_mirs=integer(),piggenes=integer())
+initiate_df
+count<-1
+for (i in 1:100){
+  random80 <- sample(miranda_fbgn$fbgn, size = 80, replace = FALSE)
+  randoset <- subset(fullset_with_fbgn, fbgn %in% random80 == TRUE, select = c(OE_pigment_PT, Gene))
+  pigs <- subset(randoset, !is.na(randoset$Gene), select = Gene)
+  pigs <- unique(pigs)
+  initiate_df[nrow(initiate_df)+1,]<- c(count,
+                                        length(which(randoset$OE_pigment_PT=="D" | randoset$OE_pigment_PT=="B")),
+                                        length(which(randoset$OE_pigment_PT=="L" | randoset$OE_pigment_PT=="B")),
+                                        length(which(randoset$OE_pigment_PT=="N")),
+                                        nrow(pigs))
+  count <- count+1
+}
+boxplot(initiate_df[,2:4])
+
+
+### for each set of genes (all genes, darkening genes, and lightening genes)
+### get a count for the number of seedmatches to darkmirs, lightmirs, and noeffectmirs
+pigset <- subset(fullset_with_fbgn, gene_fxn_pigm == "D" | gene_fxn_pigm == "B" | gene_fxn_pigm == "L", select = c(OE_pigment_PT, Gene))
+length(!is.na(unique(pigset$Gene)))
+head(pigset)
+pigsetcount <- data.frame(piggeneset=character(),gene_count=integer(),darkmirs=integer(), lightmirs=integer(), noeffectmirs=integer(), stringsAsFactors = FALSE)
+pigsetcount[1,] <- c("all", length(!is.na(unique(pigset$Gene))),
+                     length(which(pigset$OE_pigment_PT=="D" | pigset$OE_pigment_PT=="B")),
+                     length(which(pigset$OE_pigment_PT=="L" | pigset$OE_pigment_PT=="B")),
+                     length(which(pigset$OE_pigment_PT=="N")))
+
+
+darkset <- subset(fullset_with_fbgn, gene_fxn_pigm == "D" | gene_fxn_pigm == "B", select = c(OE_pigment_PT, Gene))
+length(!is.na(unique(darkset$Gene)))
+head(darkset)
+pigsetcount[2,] <- c("darkening", length(!is.na(unique(darkset$Gene))),
+                     length(which(darkset$OE_pigment_PT=="D" | darkset$OE_pigment_PT=="B")),
+                     length(which(darkset$OE_pigment_PT=="L" | darkset$OE_pigment_PT=="B")),
+                     length(which(darkset$OE_pigment_PT=="N")))
+
+lightset <- subset(fullset_with_fbgn, gene_fxn_pigm == "L" | gene_fxn_pigm == "B", select = c(OE_pigment_PT, Gene))
+length(!is.na(unique(lightset$Gene)))
+head(lightset)
+pigsetcount[3,] <- c("lightening", length(!is.na(unique(lightset$Gene))),
+                     length(which(lightset$OE_pigment_PT=="D" | lightset$OE_pigment_PT=="B")),
+                     length(which(lightset$OE_pigment_PT=="L" | lightset$OE_pigment_PT=="B")),
+                     length(which(lightset$OE_pigment_PT=="N")))
+pigsetcount
+
+### I think that the counts of mirs targeting the random set of genes may be lower than 
+### the counts of mirs targeting pigment genes because of differences in the composition
+### of the gene lists. Specifically, I think there are probably more TFs in the pigggens
+### will try to normalize this.
+
+length(which(piggenes$TF == 'y')) ##55
+length(which(piggenes$TF == 'n'))  ##25
+length(which(darkgenes$TF == 'y')) ##41
+length(which(darkgenes$TF == 'n')) ##16
+length(which(lightgenes$TF == 'y')) ##26
+length(which(lightgenes$TF == 'n')) ##10
+
+
+### adding column to show which target genes in miranda db are annotated with 
+### GO term 0003700 "transcription factor activity, sequence-specific DNA binding"
+full_tf_list <- read.delim("GO_0003700_tf_activity_DNA_bind.txt", sep="")
+tf <- c("tf")
+tf_label <- rep(tf, length.out = nrow(full_tf_list))
+full_tf_list[,2]<-tf_label
+full_tf_list <- data.frame(full_tf_list, stringsAsFactors = FALSE)
+dim(full_tf_list)
+head(full_tf_list)
+colnames(full_tf_list)<-c("fbgn","is_tf")
+fullset_with_fbgn_tf <- left_join(fullset_with_fbgn,full_tf_list,by="fbgn")
+length(which(fullset_with_fbgn_tf$is_tf == "tf"))
+miranda_fbgn_tf <- left_join(miranda_fbgn,full_tf_list, by="fbgn")
+length(which(miranda_fbgn_tf$is_tf == "tf"))
+
+### making sure to have the same number of genes and trying to match proportion of tfs
+### permute and select 100 random sets of genes of the same size as the pigmentation gene set
+### 3 sets: 
+### all pigmentation genes (80 genes, 55tf)
+### darkening genes (57 genes, 41tf)
+### lightening genes (36 genes, 26tf)
+
+### first up: sample size 80 genes, compare to all pigment genes
+permute_tf_condition80 <- data.frame(rep=integer(),darkmirs=integer(),lightmirs=integer(),noeffect_mirs=integer(),piggenes=integer())
+count <- 1
+for (i in 1:100){
+  wtf <- filter(miranda_fbgn_tf, is_tf =="tf")
+  wotf <- filter(miranda_fbgn_tf, is.na(miranda_fbgn_tf$is_tf) == TRUE)
+  rando55tf <- sample(wtf$fbgn, size = 55, replace = FALSE)
+  rando25nottf <- sample(wotf$fbgn, size = 25, replace = FALSE)
+  rando80 <- c(rando55tf,rando25nottf)
+  rando <- subset(fullset_with_fbgn_tf, fbgn %in% rando80 == TRUE, select = c(OE_pigment_PT, Gene, fbgn))
+  pigs <- subset(rando, !is.na(rando$Gene), select = Gene)
+  pigs <- unique(pigs)
+  permute_tf_condition80[nrow(permute_tf_condition80)+1,]<- c(count,
+                                                              length(which(rando$OE_pigment_PT=="D" | rando$OE_pigment_PT=="B")),
+                                                              length(which(rando$OE_pigment_PT=="L" | rando$OE_pigment_PT=="B")),
+                                                              length(which(rando$OE_pigment_PT=="N")),
+                                                              nrow(pigs))
+  count <- count+1
+}
+permute_tf_condition80
+boxplot(permute_tf_condition80[,2:4])
+
+## next sample size 57 genes, compare to darkening genes
+permute_tf_condition_dark <- data.frame(rep=integer(),darkmirs=integer(),lightmirs=integer(),noeffect_mirs=integer(),piggenes=integer())
+count <- 1
+for (i in 1:100){
+  wtf <- filter(miranda_fbgn_tf, is_tf =="tf")
+  wotf <- filter(miranda_fbgn_tf, is.na(miranda_fbgn_tf$is_tf) == TRUE)
+  rando55tf <- sample(wtf$fbgn, size = 41, replace = FALSE)
+  rando25nottf <- sample(wotf$fbgn, size = 16, replace = FALSE)
+  rando80 <- c(rando55tf,rando25nottf)
+  rando <- subset(fullset_with_fbgn_tf, fbgn %in% rando80 == TRUE, select = c(OE_pigment_PT, Gene, fbgn))
+  pigs <- subset(rando, !is.na(rando$Gene), select = Gene)
+  pigs <- unique(pigs)
+  permute_tf_condition_dark[nrow(permute_tf_condition_dark)+1,]<- c(count,
+                                                                    length(which(rando$OE_pigment_PT=="D" | rando$OE_pigment_PT=="B")),
+                                                                    length(which(rando$OE_pigment_PT=="L" | rando$OE_pigment_PT=="B")),
+                                                                    length(which(rando$OE_pigment_PT=="N")),
+                                                                    nrow(pigs))
+  count <- count+1
+}
+permute_tf_condition_dark
+boxplot(permute_tf_condition_dark[,2:4])
+
+## next sample size 57 genes, compare to lightening genes
+permute_tf_condition_light <- data.frame(rep=integer(),darkmirs=integer(),lightmirs=integer(),noeffect_mirs=integer(),piggenes=integer())
+count <- 1
+for (i in 1:100){
+  wtf <- filter(miranda_fbgn_tf, is_tf =="tf")
+  wotf <- filter(miranda_fbgn_tf, is.na(miranda_fbgn_tf$is_tf) == TRUE)
+  rando55tf <- sample(wtf$fbgn, size = 26, replace = FALSE)
+  rando25nottf <- sample(wotf$fbgn, size = 10, replace = FALSE)
+  rando80 <- c(rando55tf,rando25nottf)
+  rando <- subset(fullset_with_fbgn_tf, fbgn %in% rando80 == TRUE, select = c(OE_pigment_PT, Gene, fbgn))
+  pigs <- subset(rando, !is.na(rando$Gene), select = Gene)
+  pigs <- unique(pigs)
+  permute_tf_condition_light[nrow(permute_tf_condition_light)+1,]<- c(count,
+                                                                      length(which(rando$OE_pigment_PT=="D" | rando$OE_pigment_PT=="B")),
+                                                                      length(which(rando$OE_pigment_PT=="L" | rando$OE_pigment_PT=="B")),
+                                                                      length(which(rando$OE_pigment_PT=="N")),
+                                                                      nrow(pigs))
+  count <- count+1
+}
+permute_tf_condition_light
+boxplot(permute_tf_condition_light[,2:4])
+
+### add genes that are expressed in late pupa or early adult to data
+express <- read.delim("FlyBase_expressed_late_pupa_early_adult_moderate.txt", sep="")
+on <- c("on")
+exp <- rep(on, length.out = nrow(express))
+express[,2]<-exp
+express <- data.frame(express, stringsAsFactors = FALSE)
+dim(express)
+head(express)
+colnames(express)<-c("fbgn","exp")
+fullset_with_fbgn_tf_exp <- left_join(fullset_with_fbgn_tf,express,by="fbgn")
+length(which(fullset_with_fbgn_tf_exp$exp == "on"))
+miranda_fbgn_tf_exp <- left_join(miranda_fbgn_tf,express, by="fbgn")
+length(which(miranda_fbgn_tf_exp$exp == "on"))
+
+############REDO PERMUTATIONS WITH TF AND EXPRESSION
+### Now only sampling genes that are expressed in late pupa to early adult AND have
+### ratio of TFs comparable to pigment gene set for comparison
+
+### first up: sample size 80 genes, compare to all pigment genes
+#####WHAT IS GOING ON WHY ARE THERE ONLY 25 GENES THAT ARE EXPRESSED IN ADULTS AND ARE TF?
+permute_80_exp <- data.frame(rep=integer(),darkmirs=integer(),lightmirs=integer(),noeffect_mirs=integer(),piggenes=integer())
+count <- 1
+for (i in 1:100){
+  wtf <- filter(miranda_fbgn_tf_exp, is_tf =="tf" & exp=="on")
+  wotf <- filter(miranda_fbgn_tf_exp, is.na(miranda_fbgn_tf_exp$is_tf) == TRUE & exp=="on")
+  rando55tf <- sample(wtf$fbgn, size = 55, replace = FALSE)
+  rando25nottf <- sample(wotf$fbgn, size = 25, replace = FALSE)
+  rando80 <- c(rando55tf,rando25nottf)
+  rando <- subset(fullset_with_fbgn_tf_exp, fbgn %in% rando80 == TRUE, select = c(OE_pigment_PT, Gene, fbgn))
+  pigs <- subset(rando, !is.na(rando$Gene), select = Gene)
+  pigs <- unique(pigs)
+  permute_80_exp[nrow(permute_80_exp)+1,]<- c(count,
+                                              length(which(rando$OE_pigment_PT=="D" | rando$OE_pigment_PT=="B")),
+                                              length(which(rando$OE_pigment_PT=="L" | rando$OE_pigment_PT=="B")),
+                                              length(which(rando$OE_pigment_PT=="N")),
+                                              nrow(pigs))
+  count <- count+1
+}
+permute_80_exp
+boxplot(permute_80_exp[,2:4])
+
+## next sample size 57 genes, compare to darkening genes
+permute_dark_exp <- data.frame(rep=integer(),darkmirs=integer(),lightmirs=integer(),noeffect_mirs=integer(),piggenes=integer())
+count <- 1
+for (i in 1:100){
+  wtf <- filter(miranda_fbgn_tf_exp, is_tf =="tf" & exp=="on")
+  wotf <- filter(miranda_fbgn_tf_exp, is.na(miranda_fbgn_tf_exp$is_tf) == TRUE & exp=="on")
+  rando55tf <- sample(wtf$fbgn, size = 41, replace = FALSE)
+  rando25nottf <- sample(wotf$fbgn, size = 16, replace = FALSE)
+  rando80 <- c(rando55tf,rando25nottf)
+  rando <- subset(fullset_with_fbgn_tf_exp, fbgn %in% rando80 == TRUE, select = c(OE_pigment_PT, Gene, fbgn))
+  pigs <- subset(rando, !is.na(rando$Gene), select = Gene)
+  pigs <- unique(pigs)
+  permute_dark_exp[nrow(permute_dark_exp)+1,]<- c(count,
+                                                  length(which(rando$OE_pigment_PT=="D" | rando$OE_pigment_PT=="B")),
+                                                  length(which(rando$OE_pigment_PT=="L" | rando$OE_pigment_PT=="B")),
+                                                  length(which(rando$OE_pigment_PT=="N")),
+                                                  nrow(pigs))
+  count <- count+1
+}
+permute_dark_exp
+boxplot(permute_dark_exp[,2:4])
+
+## next sample size 57 genes, compare to lightening genes
+permute_light_exp <- data.frame(rep=integer(),darkmirs=integer(),lightmirs=integer(),noeffect_mirs=integer(),piggenes=integer())
+count <- 1
+for (i in 1:100){
+  wtf <- filter(miranda_fbgn_tf_exp, is_tf =="tf" & exp=="on")
+  wotf <- filter(miranda_fbgn_tf_exp, is.na(miranda_fbgn_tf_exp$is_tf) == TRUE & exp=="on")
+  rando55tf <- sample(wtf$fbgn, size = 26, replace = FALSE)
+  rando25nottf <- sample(wotf$fbgn, size = 10, replace = FALSE)
+  rando80 <- c(rando55tf,rando25nottf)
+  rando <- subset(fullset_with_fbgn_tf_exp, fbgn %in% rando80 == TRUE, select = c(OE_pigment_PT, Gene, fbgn))
+  pigs <- subset(rando, !is.na(rando$Gene), select = Gene)
+  pigs <- unique(pigs)
+  permute_light_exp[nrow(permute_light_exp)+1,]<- c(count,
+                                                    length(which(rando$OE_pigment_PT=="D" | rando$OE_pigment_PT=="B")),
+                                                    length(which(rando$OE_pigment_PT=="L" | rando$OE_pigment_PT=="B")),
+                                                    length(which(rando$OE_pigment_PT=="N")),
+                                                    nrow(pigs))
+  count <- count+1
+}
+permute_light_exp
+boxplot(permute_light_exp[,2:4], main="57 random genes vs light genes")
+
+
+
+##### this works - split_IDs$primary_FBgn[split_IDs$gene_symbol == 'y']
+
 
